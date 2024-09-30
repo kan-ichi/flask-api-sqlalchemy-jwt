@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ユーザー管理システム</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        #app {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        nav {
+            margin-bottom: 20px;
+        }
+        button {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+            max-width: 300px;
+        }
+        .form-group input {
+            margin-bottom: 5px;
+            padding: 5px;
+        }
+        .form-group button {
+            align-self: flex-start;
+            padding: 5px 10px;
+        }
+        .error-message {
+            color: red;
+            margin-bottom: 10px;
+        }
+        .user-list {
+            list-style-type: none;
+            padding: 0;
+            max-width: 500px;
+        }
+        .user-id {
+            font-family: monospace;
+            margin-right: 10px;
+            flex-basis: 200px;
+        }
+        .user-name {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <nav>
+            <button @click="showHome">ホーム</button>
+            <button @click="showLogin" v-if="!isLoggedIn">ログイン</button>
+            <button @click="showFirstUserRegistration" v-if="!isLoggedIn">最初のユーザー登録</button>
+            <button @click="showUserRegistration" v-if="isLoggedIn">ユーザー登録</button>
+            <button @click="showProfile" v-if="isLoggedIn">プロフィール</button>
+            <button @click="fetchUsers" v-if="isLoggedIn">ユーザー一覧</button>
+            <button @click="logout" v-if="isLoggedIn">ログアウト</button>
+        </nav>
+
+        <div v-if="currentView === 'home'">
+            <h1>ホーム</h1>
+            <p>ようこそ、ユーザー管理システムへ！</p>
+        </div>
+
+        <div v-if="currentView === 'login'">
+            <h2>ログイン</h2>
+            <div class="form-group">
+                <input v-model="loginUsername" placeholder="ユーザー名">
+                <input v-model="loginPassword" type="password" placeholder="パスワード">
+                <button @click="login">ログイン</button>
+            </div>
+            <div v-if="loginError" class="error-message">
+                {{ loginError }}
+            </div>
+        </div>
+
+        <div v-if="currentView === 'firstUserRegistration'">
+            <h2>最初のユーザー登録</h2>
+            <div class="form-group">
+                <input v-model="firstUsername" placeholder="ユーザー名">
+                <input v-model="firstPassword" type="password" placeholder="パスワード">
+                <button @click="registerFirstUser">登録</button>
+            </div>
+            <div v-if="firstUserError" class="error-message">
+                {{ firstUserError }}
+            </div>
+        </div>
+
+        <div v-if="currentView === 'userRegistration'">
+            <h2>ユーザー登録</h2>
+            <div class="form-group">
+                <input v-model="newUsername" placeholder="ユーザー名">
+                <input v-model="newPassword" type="password" placeholder="パスワード">
+                <button @click="registerUser">登録</button>
+            </div>
+            <div v-if="userRegError" class="error-message">
+                {{ userRegError }}
+            </div>
+        </div>
+
+        <div v-if="currentView === 'profile'">
+            <h2>ユーザープロフィール</h2>
+            <p>ユーザー名: {{ username }}</p>
+            <p>ユーザーID: {{ userId }}</p>
+            <button @click="deleteAccount">アカウント削除</button>
+            <div v-if="profileError" class="error-message">
+                {{ profileError }}
+            </div>
+        </div>
+
+        <div v-if="currentView === 'userList'">
+            <h2>ユーザー一覧</h2>
+            <ul class="user-list">
+                <li v-for="user in users" :key="user.id">
+                    <span class="user-id">ID: {{ user.id }}</span>
+                    <span class="user-name">名前: {{ user.username }}</span>
+                    <button @click="deleteUser(user.id)">削除</button>
+                </li>
+            </ul>
+            <div v-if="userListError" class="error-message">
+                {{ userListError }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                currentView: 'home',
+                isLoggedIn: false,
+                loginUsername: '',
+                loginPassword: '',
+                firstUsername: '',
+                firstPassword: '',
+                newUsername: '',
+                newPassword: '',
+                username: '',
+                userId: '',
+                users: [],
+                loginError: '',
+                firstUserError: '',
+                userRegError: '',
+                profileError: '',
+                userListError: ''
+            },
+            methods: {
+                showHome() {
+                    this.currentView = 'home';
+                    this.clearErrors();
+                },
+                showLogin() {
+                    this.currentView = 'login';
+                    this.clearErrors();
+                },
+                showFirstUserRegistration() {
+                    this.currentView = 'firstUserRegistration';
+                    this.clearErrors();
+                },
+                showUserRegistration() {
+                    this.currentView = 'userRegistration';
+                    this.clearErrors();
+                },
+                showProfile() {
+                    this.currentView = 'profile';
+                    this.clearErrors();
+                },
+                clearErrors() {
+                    this.loginError = '';
+                    this.firstUserError = '';
+                    this.userRegError = '';
+                    this.profileError = '';
+                    this.userListError = '';
+                },
+                clearInputs() {
+                    this.loginUsername = '';
+                    this.loginPassword = '';
+                    this.firstUsername = '';
+                    this.firstPassword = '';
+                    this.newUsername = '';
+                    this.newPassword = '';
+                },
+                async login() {
+                    try {
+                        const response = await axios.post('http://localhost:5000/login-user', {
+                            username: this.loginUsername,
+                            password: this.loginPassword
+                        });
+                        localStorage.setItem('token', response.data.access_token);
+                        this.isLoggedIn = true;
+                        this.userId = response.data.user_id;
+                        this.username = response.data.username;
+                        this.currentView = 'profile';
+                        this.clearInputs();
+                        this.clearErrors();
+                    } catch (error) {
+                        this.loginError = error.response.data.message || 'ログインに失敗しました';
+                    }
+                },
+                async registerFirstUser() {
+                    try {
+                        await axios.post('http://localhost:5000/register-first-user', {
+                            username: this.firstUsername,
+                            password: this.firstPassword
+                        });
+                        alert('最初のユーザーが登録されました');
+                        this.currentView = 'home';
+                        this.clearInputs();
+                        this.clearErrors();
+                    } catch (error) {
+                        this.firstUserError = error.response.data.message || 'ユーザー登録に失敗しました';
+                    }
+                },
+                async registerUser() {
+                    try {
+                        await axios.post('http://localhost:5000/register-user', {
+                            username: this.newUsername,
+                            password: this.newPassword
+                        }, {
+                            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                        });
+                        alert('ユーザーが登録されました');
+                        this.clearInputs();
+                        this.clearErrors();
+                    } catch (error) {
+                        this.userRegError = error.response.data.message || 'ユーザー登録に失敗しました';
+                    }
+                },
+                async deleteAccount() {
+                    if (confirm('本当にアカウントを削除しますか？')) {
+                        try {
+                            await axios.delete(`http://localhost:5000/delete-user/${this.userId}`, {
+                                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                            });
+                            alert('アカウントが削除されました');
+                            this.logout();
+                            this.currentView = 'home';
+                            this.clearErrors();
+                        } catch (error) {
+                            this.profileError = error.response.data.message || 'アカウント削除に失敗しました';
+                        }
+                    }
+                },
+                logout() {
+                    localStorage.removeItem('token');
+                    this.isLoggedIn = false;
+                    this.username = '';
+                    this.userId = '';
+                    this.currentView = 'home';
+                    this.clearInputs();
+                    this.clearErrors();
+                },
+                async fetchUsers() {
+                    try {
+                        const response = await axios.get('http://localhost:5000/list-users', {
+                            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                        });
+                        this.users = response.data;
+                        this.currentView = 'userList';
+                        this.clearErrors();
+                    } catch (error) {
+                        this.userListError = error.response.data.message || 'ユーザーリストの取得に失敗しました';
+                    }
+                },
+                async deleteUser(userId) {
+                    if (confirm('このユーザーを削除しますか？')) {
+                        try {
+                            await axios.delete(`http://localhost:5000/delete-user/${userId}`, {
+                                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                            });
+                            alert('ユーザーが削除されました');
+                            this.fetchUsers();  // ユーザーリストを更新
+                        } catch (error) {
+                            this.userListError = error.response.data.message || 'ユーザー削除に失敗しました';
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
